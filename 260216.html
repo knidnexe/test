@@ -1,0 +1,1190 @@
+<!doctype html>
+<html lang="ja">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width,initial-scale=1" />
+  <title>4D Spirograph (Local HTML) — Accum Trail + Width by Age + Period UI</title>
+  <style>
+    :root { color-scheme: light dark; }
+    body { margin: 0; font-family: system-ui, -apple-system, "Segoe UI", sans-serif; }
+    .wrap { display: grid; grid-template-columns: 430px 1fr; height: 100vh; }
+    .panel { padding: 14px 14px 10px; border-right: 1px solid rgba(127,127,127,.25); overflow: auto; }
+    .panel h1 { font-size: 16px; margin: 0 0 10px; }
+    .row { margin: 10px 0; }
+    label { display: flex; justify-content: space-between; gap: 10px; font-size: 12px; opacity: .9; }
+    input[type="range"] { width: 100%; }
+    select { width: 100%; padding: 7px 10px; border-radius: 10px; border: 1px solid rgba(127,127,127,.35); background: transparent; }
+    .btns { display: flex; gap: 8px; margin-top: 10px; flex-wrap: wrap; }
+    button { padding: 8px 10px; border-radius: 10px; border: 1px solid rgba(127,127,127,.35); background: transparent; cursor: pointer; }
+    button:hover { background: rgba(127,127,127,.12); }
+    .hint { font-size: 12px; opacity: .8; line-height: 1.5; margin-top: 10px; }
+    canvas { display: block; width: 100%; height: 100%; background: #0b0d10; }
+    .badge { font-size: 12px; opacity: .85; margin-top: 6px; }
+    .mono { font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace; }
+    hr { border:0;border-top:1px solid rgba(127,127,127,.25); margin: 12px 0; }
+    .grid2 { display:grid; grid-template-columns: 1fr 1fr; gap: 8px; }
+  </style>
+</head>
+<body>
+<div class="wrap">
+  <div class="panel">
+    <h1>4D Spirograph（ローカルHTML版）</h1>
+
+    <div class="row">
+      <label><span>点数 N</span><span class="mono" id="nVal"></span></label>
+      <input id="N" type="range" min="1000" max="40000" step="1000" value="14000">
+    </div>
+
+    <div class="row">
+      <label><span>周回（tの長さ）</span><span class="mono" id="loopsVal"></span></label>
+      <input id="loops" type="range" min="5" max="180" step="1" value="40">
+    </div>
+
+    <hr>
+
+    <div class="row"><label><span>R1</span><span class="mono" id="R1Val"></span></label><input id="R1" type="range" min="0" max="2" step="0.01" value="1.00"></div>
+    <div class="row"><label><span>r1</span><span class="mono" id="r1Val"></span></label><input id="r1" type="range" min="0" max="2" step="0.01" value="0.55"></div>
+    <div class="row"><label><span>a（角速度）</span><span class="mono" id="aVal"></span></label><input id="a" type="range" min="0" max="20" step="0.01" value="3.00"></div>
+    <div class="row"><label><span>b（角速度）</span><span class="mono" id="bVal"></span></label><input id="b" type="range" min="0" max="30" step="0.01" value="7.00"></div>
+    <div class="row"><label><span>R2</span><span class="mono" id="R2Val"></span></label><input id="R2" type="range" min="0" max="2" step="0.01" value="0.90"></div>
+    <div class="row"><label><span>c（角速度）</span><span class="mono" id="cVal"></span></label><input id="c" type="range" min="0" max="30" step="0.01" value="5.00"></div>
+
+    <hr>
+
+    <div class="row"><label><span>4D投影強度（w→3D）</span><span class="mono" id="projVal"></span></label><input id="proj" type="range" min="0" max="1.5" step="0.01" value="0.70"></div>
+    <div class="row"><label><span>描画スケール</span><span class="mono" id="scaleVal"></span></label><input id="scale" type="range" min="0.3" max="3.0" step="0.01" value="1.20"></div>
+
+    <hr>
+
+    <div class="badge">色（w/曲率）</div>
+    <div class="row">
+      <label><span>色モード（基礎）</span><span class="mono" id="colorModeVal"></span></label>
+      <select id="colorMode">
+        <option value="w">w値で着色</option>
+        <option value="curv">曲率で着色</option>
+        <option value="none">単色</option>
+      </select>
+    </div>
+    <div class="grid2">
+      <div class="row"><label><span>彩度</span><span class="mono" id="satVal"></span></label><input id="sat" type="range" min="0" max="100" step="1" value="85"></div>
+      <div class="row"><label><span>輝度</span><span class="mono" id="lightVal"></span></label><input id="light" type="range" min="0" max="100" step="1" value="70"></div>
+    </div>
+    <div class="row"><label><span>基礎色コントラスト（gamma）</span><span class="mono" id="gammaVal"></span></label><input id="gamma" type="range" min="0.3" max="3.0" step="0.01" value="1.00"></div>
+
+    <hr>
+
+    <div class="badge">軌跡描画アニメーション</div>
+
+    <div class="row">
+      <label><span>描画モード</span><span class="mono" id="drawModeVal"></span></label>
+      <select id="drawMode">
+        <option value="trail" selected>ヘッド＋軌跡（時間で消える/残る）</option>
+        <option value="full">常に全体表示</option>
+      </select>
+    </div>
+
+    <div class="badge">ヘッド速度指定（追加）</div>
+    <div class="row">
+      <label><span>速度指定</span><span class="mono" id="speedModeVal"></span></label>
+      <select id="speedMode">
+        <option value="pps">点/秒で指定</option>
+        <option value="period" selected>周期（秒/周）で指定</option>
+      </select>
+    </div>
+    <div class="row">
+      <label><span>描画速度（点/秒）</span><span class="mono" id="drawSpeedVal"></span></label>
+      <input id="drawSpeed" type="range" min="50" max="20000" step="50" value="6000">
+    </div>
+    <div class="row">
+      <label><span>周期（秒/周）</span><span class="mono" id="periodVal"></span></label>
+      <input id="period" type="range" min="0.5" max="60" step="0.1" value="6.0">
+    </div>
+
+    <div class="row">
+      <label><span>軌跡が消えるまで（秒）</span><span class="mono" id="trailSecVal"></span></label>
+      <select id="trailSec">
+        <option value="0.5">0.5</option><option value="1">1</option><option value="2">2</option>
+        <option value="3">3</option><option value="5" selected>5</option><option value="8">8</option>
+        <option value="12">12</option><option value="20">20</option>
+        <option value="inf">∞（消さない）</option>
+      </select>
+    </div>
+
+    <div class="row">
+      <label><span>一周したら</span><span class="mono" id="loopModeVal"></span></label>
+      <select id="loopMode">
+        <option value="loop" selected>ループして描き続ける</option>
+        <option value="stop">最後まで描いたら停止（全体保持）</option>
+      </select>
+    </div>
+
+    <div class="badge">∞でも積み重ねる（累積キャンバス）</div>
+    <div class="row">
+      <label><span>累積描画</span><span class="mono" id="accumVal"></span></label>
+      <select id="accum">
+        <option value="off" selected>OFF（毎フレーム描き直し）</option>
+        <option value="on">ON（∞時に積み重ねる）</option>
+      </select>
+    </div>
+    <div class="row">
+      <label><span>累積の減衰（0=残り続ける）</span><span class="mono" id="accumFadeVal"></span></label>
+      <input id="accumFade" type="range" min="0" max="0.08" step="0.001" value="0.000">
+    </div>
+    <div class="hint">
+      ※「∞」かつ「ループ」かつ「累積ON」で “積み重ね”。<br>
+      減衰を少し上げると、古い層がゆっくり薄くなります。
+    </div>
+
+    <hr>
+
+    <div class="badge">軌跡の「出て→消える」色グラデ</div>
+    <div class="row">
+      <label><span>軌跡グラデ</span><span class="mono" id="trailGradVal"></span></label>
+      <select id="trailGrad">
+        <option value="off">OFF（基礎色のみ）</option>
+        <option value="alpha">α（透明度）でフェード</option>
+        <option value="hue">色相でグラデ（古→新）</option>
+        <option value="both" selected>色相＋α</option>
+      </select>
+    </div>
+
+    <div class="grid2">
+      <div class="row"><label><span>古い側Hue</span><span class="mono" id="hOldVal"></span></label><input id="hOld" type="range" min="0" max="360" step="1" value="220"></div>
+      <div class="row"><label><span>新しい側Hue</span><span class="mono" id="hNewVal"></span></label><input id="hNew" type="range" min="0" max="360" step="1" value="20"></div>
+    </div>
+
+    <div class="grid2">
+      <div class="row"><label><span>最小α（古）</span><span class="mono" id="aMinVal"></span></label><input id="aMin" type="range" min="0" max="1" step="0.01" value="0.08"></div>
+      <div class="row"><label><span>最大α（新）</span><span class="mono" id="aMaxVal"></span></label><input id="aMax" type="range" min="0" max="1" step="0.01" value="0.95"></div>
+    </div>
+
+    <div class="row"><label><span>軌跡グラデ強度（gamma）</span><span class="mono" id="trailGammaVal"></span></label><input id="trailGamma" type="range" min="0.3" max="3.0" step="0.01" value="1.10"></div>
+
+    <div class="badge">太さを年齢で変える（追加）</div>
+    <div class="row">
+      <label><span>太さモード</span><span class="mono" id="widthModeVal"></span></label>
+      <select id="widthMode">
+        <option value="off">OFF（一定）</option>
+        <option value="newThick" selected>先太（新しいほど太い）</option>
+        <option value="newThin">先細（新しいほど細い）</option>
+      </select>
+    </div>
+    <div class="grid2">
+      <div class="row"><label><span>最小太さ</span><span class="mono" id="wMinVal"></span></label><input id="wMin" type="range" min="0.2" max="4.0" step="0.05" value="0.7"></div>
+      <div class="row"><label><span>最大太さ</span><span class="mono" id="wMaxVal"></span></label><input id="wMax" type="range" min="0.2" max="6.0" step="0.05" value="2.6"></div>
+    </div>
+    <div class="row"><label><span>太さカーブ（gamma）</span><span class="mono" id="wGammaVal"></span></label><input id="wGamma" type="range" min="0.3" max="3.0" step="0.01" value="1.0"></div>
+
+    <div class="row">
+      <label><span>描画間引き（軽量化）</span><span class="mono" id="stepVal"></span></label>
+      <input id="step" type="range" min="1" max="12" step="1" value="2">
+    </div>
+
+    <hr>
+
+    <div class="badge">4D回転（-π〜π）</div>
+    <div class="row"><label><span>XY</span><span class="mono" id="xyVal"></span></label><input id="XY" type="range" min="-3.14159" max="3.14159" step="0.001" value="0"></div>
+    <div class="row"><label><span>XZ</span><span class="mono" id="xzVal"></span></label><input id="XZ" type="range" min="-3.14159" max="3.14159" step="0.001" value="0"></div>
+    <div class="row"><label><span>XW</span><span class="mono" id="xwVal"></span></label><input id="XW" type="range" min="-3.14159" max="3.14159" step="0.001" value="0"></div>
+    <div class="row"><label><span>YZ</span><span class="mono" id="yzVal"></span></label><input id="YZ" type="range" min="-3.14159" max="3.14159" step="0.001" value="0"></div>
+    <div class="row"><label><span>YW</span><span class="mono" id="ywVal"></span></label><input id="YW" type="range" min="-3.14159" max="3.14159" step="0.001" value="0"></div>
+    <div class="row"><label><span>ZW</span><span class="mono" id="zwVal"></span></label><input id="ZW" type="range" min="-3.14159" max="3.14159" step="0.001" value="0"></div>
+
+    <hr>
+
+    <div class="badge">アニメーション（好きな軸で回転）</div>
+    <div class="row">
+      <label><span>再生</span><span class="mono" id="playVal"></span></label>
+      <select id="play">
+        <option value="off">停止</option>
+        <option value="on" selected>再生</option>
+      </select>
+    </div>
+    <div class="grid2">
+      <div class="row">
+        <label><span>主回転平面</span><span class="mono" id="plane1Val"></span></label>
+        <select id="plane1">
+          <option>XY</option><option selected>XZ</option><option>XW</option>
+          <option>YZ</option><option>YW</option><option>ZW</option>
+        </select>
+      </div>
+      <div class="row">
+        <label><span>副回転平面</span><span class="mono" id="plane2Val"></span></label>
+        <select id="plane2">
+          <option value="none" selected>なし</option>
+          <option>XY</option><option>XZ</option><option>XW</option>
+          <option>YZ</option><option>YW</option><option>ZW</option>
+        </select>
+      </div>
+    </div>
+    <div class="row"><label><span>主 回転速度（rad/s）</span><span class="mono" id="spd1Val"></span></label><input id="spd1" type="range" min="-3.0" max="3.0" step="0.01" value="0.60"></div>
+    <div class="row"><label><span>副 回転速度（rad/s）</span><span class="mono" id="spd2Val"></span></label><input id="spd2" type="range" min="-3.0" max="3.0" step="0.01" value="0.15"></div>
+    <div class="row"><label><span>アニメFPS（描画更新）</span><span class="mono" id="fpsVal"></span></label><input id="fps" type="range" min="10" max="60" step="1" value="45"></div>
+
+    <div class="btns">
+      <button id="reset4d">4D回転リセット</button>
+      <button id="resetView">視点リセット</button>
+      <button id="toggleDots">点/線 切替</button>
+      <button id="snap">PNG保存</button>
+      <button id="restartDraw">描画やり直し</button>
+      <button id="clearAccum">累積クリア</button>
+<hr>
+<div class="badge">設定の書き出し / 読み込み</div>
+
+<div class="btns">
+  <button id="exportCfg">設定をコピー（JSON）</button>
+  <button id="downloadCfg">JSONを保存</button>
+  <button id="importCfg">貼り付けJSONを読み込み</button>
+  <label style="display:inline-flex;align-items:center;gap:8px; padding:8px 10px; border-radius:10px; border:1px solid rgba(127,127,127,.35); cursor:pointer;">
+    JSONを選択
+    <input id="uploadCfg" type="file" accept="application/json" style="display:none;">
+  </label>
+</div>
+
+<div class="row">
+  <label><span>設定JSON</span><span class="mono" id="cfgLen">0</span></label>
+  <textarea id="cfgText" rows="6" style="width:100%; padding:10px; border-radius:12px; border:1px solid rgba(127,127,127,.35); background:transparent; font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace; font-size:12px;"></textarea>
+</div>
+<div class="hint">
+  1) 「設定をコピー」でJSONを退避 → 2) 「貼り付けJSONを読み込み」で復元。<br>
+  ファイル保存/読込も可能（ローカルのみ）。
+</div>
+
+    </div>
+
+    <div class="hint">
+      操作：ドラッグ=視点回転 / ホイール=ズーム。<br>
+      「∞」「ループ」「累積ON」で積み重ね。<br>
+      速度は「周期（秒/周）」で指定可能。
+    </div>
+  </div>
+
+  <canvas id="cv"></canvas>
+</div>
+
+<script>
+(() => {
+  // ---------- DOM ----------
+  const cv = document.getElementById('cv');
+  const ctx = cv.getContext('2d');
+
+  const el = (id) => document.getElementById(id);
+  const sliders = {
+    N: el('N'), loops: el('loops'),
+    R1: el('R1'), r1: el('r1'), a: el('a'), b: el('b'), R2: el('R2'), c: el('c'),
+    proj: el('proj'), scale: el('scale'),
+    sat: el('sat'), light: el('light'), gamma: el('gamma'), step: el('step'),
+    XY: el('XY'), XZ: el('XZ'), XW: el('XW'), YZ: el('YZ'), YW: el('YW'), ZW: el('ZW'),
+    play: el('play'), plane1: el('plane1'), plane2: el('plane2'), spd1: el('spd1'), spd2: el('spd2'), fps: el('fps'),
+    colorMode: el('colorMode'),
+
+    drawMode: el('drawMode'),
+    speedMode: el('speedMode'),
+    drawSpeed: el('drawSpeed'),
+    period: el('period'),
+    trailSec: el('trailSec'),
+    loopMode: el('loopMode'),
+    accum: el('accum'),
+    accumFade: el('accumFade'),
+
+    trailGrad: el('trailGrad'),
+    hOld: el('hOld'),
+    hNew: el('hNew'),
+    aMin: el('aMin'),
+    aMax: el('aMax'),
+    trailGamma: el('trailGamma'),
+
+    widthMode: el('widthMode'),
+    wMin: el('wMin'),
+    wMax: el('wMax'),
+    wGamma: el('wGamma'),
+  };
+
+  const labels = {};
+  [
+    'nVal','loopsVal','R1Val','r1Val','aVal','bVal','R2Val','cVal','projVal','scaleVal',
+    'xyVal','xzVal','xwVal','yzVal','ywVal','zwVal',
+    'colorModeVal','satVal','lightVal','gammaVal','stepVal',
+    'playVal','plane1Val','plane2Val','spd1Val','spd2Val','fpsVal',
+    'drawModeVal','speedModeVal','drawSpeedVal','periodVal','trailSecVal','loopModeVal',
+    'accumVal','accumFadeVal',
+    'trailGradVal','hOldVal','hNewVal','aMinVal','aMaxVal','trailGammaVal',
+    'widthModeVal','wMinVal','wMaxVal','wGammaVal'
+  ].forEach(id => labels[id] = el(id));
+
+  const btnReset4d = el('reset4d');
+  const btnResetView = el('resetView');
+  const btnToggleDots = el('toggleDots');
+  const btnSnap = el('snap');
+  const btnRestartDraw = el('restartDraw');
+  const btnClearAccum = el('clearAccum');
+  // --- config I/O UI ---
+  const btnExportCfg = el('exportCfg');
+  const btnDownloadCfg = el('downloadCfg');
+  const btnImportCfg = el('importCfg');
+  const uploadCfg = el('uploadCfg');
+  const cfgText = el('cfgText');
+  const cfgLen = el('cfgLen');
+
+
+  // ---------- offscreen for accumulation ----------
+  const off = document.createElement('canvas');
+  const octx = off.getContext('2d');
+
+  // ---------- state ----------
+  let W = 0, H = 0, DPR = 1;
+  let N = +sliders.N.value;
+
+  let drawDots = false;
+
+  let points4d = null; // 4*N
+  let wRot = null;     // N
+  let points3d = null; // 3*N
+  let curv = null;     // N
+  let points2d = null; // 2*N
+
+  // view
+  let yaw = 0.4, pitch = -0.25;
+  let zoom = 1.8;
+  let isDrag = false, lastX = 0, lastY = 0;
+
+  // animation timing
+  let rafId = null;
+  let lastFrame = 0;
+
+  // --- NEW: timestamp trail (wrapしてもリセットしない) ---
+  let nowSec = 0;
+  let lastSeen = null;          // Float32Array(N) : last time head visited point
+  let lastHeadPos = 0;          // previous headPos (float)
+
+  // wrap detect for accumulation
+  let prevHeadInt = 0;
+  let wrappedThisTick = false;
+
+  // ---------- helpers ----------
+  const TAU = Math.PI * 2;
+  const clamp01 = (x) => Math.max(0, Math.min(1, x));
+
+  function resize() {
+    DPR = Math.max(1, Math.min(3, window.devicePixelRatio || 1));
+    W = cv.clientWidth;
+    H = cv.clientHeight;
+    cv.width = Math.floor(W * DPR);
+    cv.height = Math.floor(H * DPR);
+    ctx.setTransform(DPR, 0, 0, DPR, 0, 0);
+
+    off.width = cv.width;
+    off.height = cv.height;
+    octx.setTransform(1,0,0,1,0,0);
+
+    clearAccumulation();
+  }
+
+  function setLabel(id, v, digits=2) {
+    if (!labels[id]) return;
+    labels[id].textContent = (typeof v === 'number') ? v.toFixed(digits) : String(v);
+  }
+
+  function refreshLabels() {
+    setLabel('nVal', +sliders.N.value, 0);
+    setLabel('loopsVal', +sliders.loops.value, 0);
+    setLabel('R1Val', +sliders.R1.value, 2);
+    setLabel('r1Val', +sliders.r1.value, 2);
+    setLabel('aVal', +sliders.a.value, 2);
+    setLabel('bVal', +sliders.b.value, 2);
+    setLabel('R2Val', +sliders.R2.value, 2);
+    setLabel('cVal', +sliders.c.value, 2);
+    setLabel('projVal', +sliders.proj.value, 2);
+    setLabel('scaleVal', +sliders.scale.value, 2);
+
+    setLabel('xyVal', +sliders.XY.value, 3);
+    setLabel('xzVal', +sliders.XZ.value, 3);
+    setLabel('xwVal', +sliders.XW.value, 3);
+    setLabel('yzVal', +sliders.YZ.value, 3);
+    setLabel('ywVal', +sliders.YW.value, 3);
+    setLabel('zwVal', +sliders.ZW.value, 3);
+
+    labels.colorModeVal.textContent = sliders.colorMode.value;
+    setLabel('satVal', +sliders.sat.value, 0);
+    setLabel('lightVal', +sliders.light.value, 0);
+    setLabel('gammaVal', +sliders.gamma.value, 2);
+    setLabel('stepVal', +sliders.step.value, 0);
+
+    labels.playVal.textContent = sliders.play.value;
+    labels.plane1Val.textContent = sliders.plane1.value;
+    labels.plane2Val.textContent = sliders.plane2.value;
+    setLabel('spd1Val', +sliders.spd1.value, 2);
+    setLabel('spd2Val', +sliders.spd2.value, 2);
+    setLabel('fpsVal', +sliders.fps.value, 0);
+
+    labels.drawModeVal.textContent = sliders.drawMode.value;
+    labels.speedModeVal.textContent = sliders.speedMode.value;
+    setLabel('drawSpeedVal', +sliders.drawSpeed.value, 0);
+    setLabel('periodVal', +sliders.period.value, 1);
+    labels.trailSecVal.textContent = sliders.trailSec.value;
+    labels.loopModeVal.textContent = sliders.loopMode.value;
+
+    labels.accumVal.textContent = sliders.accum.value;
+    setLabel('accumFadeVal', +sliders.accumFade.value, 3);
+
+    labels.trailGradVal.textContent = sliders.trailGrad.value;
+    setLabel('hOldVal', +sliders.hOld.value, 0);
+    setLabel('hNewVal', +sliders.hNew.value, 0);
+    setLabel('aMinVal', +sliders.aMin.value, 2);
+    setLabel('aMaxVal', +sliders.aMax.value, 2);
+    setLabel('trailGammaVal', +sliders.trailGamma.value, 2);
+
+    labels.widthModeVal.textContent = sliders.widthMode.value;
+    setLabel('wMinVal', +sliders.wMin.value, 2);
+    setLabel('wMaxVal', +sliders.wMax.value, 2);
+    setLabel('wGammaVal', +sliders.wGamma.value, 2);
+  }
+
+  // ---------- curve gen ----------
+  function generate4D() {
+    N = +sliders.N.value;
+    const loops = +sliders.loops.value;
+
+    const R1 = +sliders.R1.value;
+    const r1 = +sliders.r1.value;
+    const a  = +sliders.a.value;
+    const b  = +sliders.b.value;
+    const R2 = +sliders.R2.value;
+    const c  = +sliders.c.value;
+
+    const tMax = TAU * loops;
+    points4d = new Float32Array(4 * N);
+
+    for (let i = 0; i < N; i++) {
+      const t = (i / (N - 1)) * tMax;
+      const x = R1 * Math.cos(a * t) + r1 * Math.cos(b * t);
+      const y = R1 * Math.sin(a * t) - r1 * Math.sin(b * t);
+      const z = R2 * Math.cos(c * t);
+      const w = R2 * Math.sin(c * t);
+      const o = 4 * i;
+      points4d[o+0] = x; points4d[o+1] = y; points4d[o+2] = z; points4d[o+3] = w;
+    }
+
+    // --- ★ここに入れる（②） ---
+    lastSeen = new Float32Array(N);
+    for (let i = 0; i < N; i++) lastSeen[i] = -1e30; // まだ描かれてない扱い
+    lastHeadPos = 0;
+    nowSec = 0;
+
+    restartDraw();
+    clearAccumulation();
+  }
+
+  function rotatePlane4D(src, dst, theta, i, j) {
+    const c = Math.cos(theta), s = Math.sin(theta);
+    for (let k = 0; k < N; k++) {
+      const o4 = 4*k;
+      const xi = src[o4+i], xj = src[o4+j];
+      dst[o4+i] = c*xi - s*xj;
+      dst[o4+j] = s*xi + c*xj;
+      for (let m=0;m<4;m++) if (m!==i && m!==j) dst[o4+m] = src[o4+m];
+    }
+  }
+
+  function apply4DRotationsAndProject() {
+    const thXY = +sliders.XY.value, thXZ = +sliders.XZ.value, thXW = +sliders.XW.value;
+    const thYZ = +sliders.YZ.value, thYW = +sliders.YW.value, thZW = +sliders.ZW.value;
+    const proj = +sliders.proj.value;
+
+    const tmpA = new Float32Array(points4d);
+    const tmpB = new Float32Array(4 * N);
+
+    rotatePlane4D(tmpA, tmpB, thXY, 0, 1); tmpA.set(tmpB);
+    rotatePlane4D(tmpA, tmpB, thXZ, 0, 2); tmpA.set(tmpB);
+    rotatePlane4D(tmpA, tmpB, thXW, 0, 3); tmpA.set(tmpB);
+    rotatePlane4D(tmpA, tmpB, thYZ, 1, 2); tmpA.set(tmpB);
+    rotatePlane4D(tmpA, tmpB, thYW, 1, 3); tmpA.set(tmpB);
+    rotatePlane4D(tmpA, tmpB, thZW, 2, 3); tmpA.set(tmpB);
+
+    wRot = new Float32Array(N);
+    points3d = new Float32Array(3 * N);
+
+    let maxAbs = 1e-9, wMax = 1e-9;
+
+    for (let k=0;k<N;k++){
+      const o4 = 4*k;
+      const x=tmpA[o4], y=tmpA[o4+1], z=tmpA[o4+2], w=tmpA[o4+3];
+      wRot[k]=w; wMax = Math.max(wMax, Math.abs(w));
+
+      let denom = 1.0 + proj*w;
+      if (Math.abs(denom) < 1e-6) denom = (denom>=0?1e-6:-1e-6);
+
+      const X=x/denom, Y=y/denom, Z=z/denom;
+      const o3 = 3*k;
+      points3d[o3]=X; points3d[o3+1]=Y; points3d[o3+2]=Z;
+      maxAbs = Math.max(maxAbs, Math.abs(X), Math.abs(Y), Math.abs(Z));
+    }
+
+    const inv = 1.0/maxAbs, winv=1.0/wMax;
+    for (let k=0;k<N;k++){
+      const o3=3*k;
+      points3d[o3]*=inv; points3d[o3+1]*=inv; points3d[o3+2]*=inv;
+      wRot[k]*=winv;
+    }
+
+    computeCurvature3D();
+  }
+
+  function computeCurvature3D(){
+    curv = new Float32Array(N);
+    let cMax = 1e-9;
+    for (let i=1;i<N-1;i++){
+      const im=3*(i-1), ic=3*i, ip=3*(i+1);
+      const vx=points3d[ip]-points3d[im];
+      const vy=points3d[ip+1]-points3d[im+1];
+      const vz=points3d[ip+2]-points3d[im+2];
+      const ax=points3d[ip]-2*points3d[ic]+points3d[im];
+      const ay=points3d[ip+1]-2*points3d[ic+1]+points3d[im+1];
+      const az=points3d[ip+2]-2*points3d[ic+2]+points3d[im+2];
+
+      const cx=vy*az - vz*ay;
+      const cy=vz*ax - vx*az;
+      const cz=vx*ay - vy*ax;
+
+      const v2=vx*vx+vy*vy+vz*vz;
+      const v=Math.sqrt(v2);
+
+      let kappa=0;
+      if (v>1e-9){
+        const cross=Math.sqrt(cx*cx+cy*cy+cz*cz);
+        kappa = cross/(v*v*v);
+      }
+      curv[i]=kappa;
+      cMax = Math.max(cMax, kappa);
+    }
+    curv[0]=curv[1]; curv[N-1]=curv[N-2];
+    const denom = cMax*0.35 + 1e-9;
+    for (let i=0;i<N;i++){
+      let v=curv[i]/denom;
+      if (v>1) v=1;
+      curv[i]=v;
+    }
+  }
+
+  function project3DTo2D(){
+    const s = +sliders.scale.value;
+    const cx=W*0.5, cy=H*0.5;
+    const cyaw=Math.cos(yaw), syaw=Math.sin(yaw);
+    const cp=Math.cos(pitch), sp=Math.sin(pitch);
+    const camDist = 3.0/zoom;
+    const f=1.4;
+
+    points2d = new Float32Array(2*N);
+    for (let k=0;k<N;k++){
+      const o3=3*k;
+      const x=points3d[o3], y=points3d[o3+1], z=points3d[o3+2];
+
+      const x1=cyaw*x + syaw*z;
+      const z1=-syaw*x + cyaw*z;
+      const y2=cp*y - sp*z1;
+      const z2=sp*y + cp*z1;
+
+      const zcam=z2+camDist;
+      const px=(f*x1)/zcam;
+      const py=(f*y2)/zcam;
+
+      const o2=2*k;
+      points2d[o2] = cx + px*Math.min(W,H)*0.42*s;
+      points2d[o2+1] = cy + py*Math.min(W,H)*0.42*s;
+    }
+  }
+
+  // ---------- color + width ----------
+  function applyGamma(v, g){ return Math.pow(clamp01(v), g); }
+
+  function baseColorValue(i){
+    const mode = sliders.colorMode.value;
+    if (mode === 'none') return 0.65;
+    if (mode === 'w') return (wRot[i]*0.5 + 0.5);
+    return curv[i];
+  }
+
+  function baseHsl(v01){
+    const hue = 220 + (20-220)*v01;
+    const sat = +sliders.sat.value;
+    const light = +sliders.light.value;
+    return { hue, sat, light };
+  }
+
+  function trailHue(age01){
+    const h0=+sliders.hOld.value, h1=+sliders.hNew.value;
+    return h0 + (h1-h0)*age01;
+  }
+  function trailAlpha(age01){
+    const a0=+sliders.aMin.value, a1=+sliders.aMax.value;
+    return a0 + (a1-a0)*age01;
+  }
+
+  function composeStroke(i, age01){
+    const modeTrail = sliders.trailGrad.value;
+    const vb = applyGamma(baseColorValue(i), +sliders.gamma.value);
+    const base = baseHsl(vb);
+
+    const at = applyGamma(age01, +sliders.trailGamma.value);
+    let hue = base.hue;
+    let alpha = 0.95;
+
+    if (modeTrail === 'off') {
+      alpha = 0.95;
+      return `hsla(${hue.toFixed(1)}, ${base.sat}%, ${base.light}%, ${alpha})`;
+    }
+    if (modeTrail === 'alpha' || modeTrail === 'both') alpha = trailAlpha(at);
+    if (modeTrail === 'hue'   || modeTrail === 'both') hue   = trailHue(at);
+
+    return `hsla(${hue.toFixed(1)}, ${base.sat}%, ${base.light}%, ${alpha})`;
+  }
+
+  function widthByAge(age01){
+    const mode = sliders.widthMode.value;
+    const w0 = +sliders.wMin.value;
+    const w1 = +sliders.wMax.value;
+    if (mode === 'off') return w0;
+    let t = applyGamma(age01, +sliders.wGamma.value);
+    if (mode === 'newThin') t = 1 - t; // newest is thin
+    // newThick: newest is thick => t as-is
+    return w0 + (w1 - w0) * t;
+  }
+
+  // ---------- draw-head ----------
+  function restartDraw(){
+    headPos = 0;
+    drawnOnce = false;
+    stopAtEnd = false;
+    prevHeadInt = 0;
+    wrappedThisTick = false;
+  }
+
+  function pointsPerSecond(){
+    const mode = sliders.speedMode.value;
+    if (mode === 'pps') return +sliders.drawSpeed.value;
+    // period mode: seconds per revolution => N / period
+    const p = Math.max(0.05, +sliders.period.value);
+    return N / p;
+  }
+
+  function trailWindowPoints(){
+    const sec = sliders.trailSec.value;
+    if (sec === 'inf') return Infinity;
+    const t = parseFloat(sec);
+    const pps = pointsPerSecond();
+    return Math.max(2, Math.floor(pps * t));
+  }
+
+  function shouldAccumulate(){
+    return (
+      sliders.drawMode.value === 'trail' &&
+      sliders.trailSec.value === 'inf' &&
+      sliders.loopMode.value === 'loop' &&
+      sliders.accum.value === 'on'
+    );
+  }
+
+  function clearAccumulation(){
+    // paint solid background
+    octx.setTransform(1,0,0,1,0,0);
+    octx.clearRect(0,0,off.width,off.height);
+    octx.fillStyle = '#0b0d10';
+    octx.fillRect(0,0,off.width,off.height);
+  }
+
+  // draw background either from offscreen or fresh
+  function beginFrame(){
+    if (shouldAccumulate()) {
+      // decay old content if requested (paint translucent black over it)
+      const fade = +sliders.accumFade.value; // 0..0.08
+      if (fade > 0) {
+        octx.fillStyle = `rgba(11,13,16,${fade})`;
+        octx.fillRect(0,0,off.width,off.height);
+      }
+      // show accumulated as base
+      ctx.clearRect(0,0,W,H);
+      ctx.drawImage(off, 0, 0, off.width, off.height, 0, 0, W, H);
+    } else {
+      ctx.clearRect(0,0,W,H);
+      ctx.fillStyle = '#0b0d10';
+      ctx.fillRect(0,0,W,H);
+    }
+  }
+
+  function commitToAccumulation(){
+    if (!shouldAccumulate()) return;
+    // copy current visible canvas into offscreen (accumulate)
+    octx.drawImage(cv, 0, 0);
+  }
+
+  function hud(){
+    ctx.save();
+    ctx.globalAlpha = 0.75;
+    ctx.fillStyle = 'rgba(220,235,255,0.9)';
+    ctx.font = '12px ui-monospace, SFMono-Regular, Menlo, Consolas, monospace';
+    const pps = pointsPerSecond();
+    ctx.fillText(
+      `mode=${sliders.drawMode.value} head=${headPos.toFixed(0)}/${N} pps=${pps.toFixed(0)} trail=${sliders.trailSec.value} accum=${shouldAccumulate()?'ON':'off'}  yaw=${yaw.toFixed(2)} pitch=${pitch.toFixed(2)} zoom=${zoom.toFixed(2)}`,
+      12, 18
+    );
+    ctx.restore();
+  }
+
+  function drawTrail(){
+    beginFrame();
+    if (!points2d) return;
+
+    const step = Math.max(1, +sliders.step.value);
+    const secStr = sliders.trailSec.value;
+    const infinite = (secStr === 'inf');
+    const trailSec = infinite ? 1e30 : Math.max(0.001, parseFloat(secStr));
+
+    // stop-mode: finish then show full
+    if (sliders.loopMode.value === 'stop' && stopAtEnd) {
+      drawFull(true);
+      commitToAccumulation();
+      return;
+    }
+
+    ctx.save();
+    ctx.globalAlpha = 1.0;
+
+    if (!drawDots) {
+      for (let i = 0; i < N - step; i += step) {
+        const j = i + step;
+
+        const ai = nowSec - lastSeen[i];
+        const aj = nowSec - lastSeen[j];
+
+        // both endpoints must be "alive" (or ∞)
+        if (!infinite) {
+          if (ai > trailSec && aj > trailSec) continue; // totally dead
+          if (lastSeen[i] < -1e20 || lastSeen[j] < -1e20) continue; // never seen
+        } else {
+          // ∞: allow drawing after first seen; if never seen skip
+          if (lastSeen[i] < -1e20 || lastSeen[j] < -1e20) continue;
+        }
+
+        // age01: 1=newest, 0=oldest (within trailSec)
+        const age = Math.min(ai, aj);
+        const age01 = infinite ? 1.0 : clamp01(1.0 - (age / trailSec));
+
+        ctx.strokeStyle = composeStroke(i, age01);
+        ctx.lineWidth = widthByAge(age01);
+
+        const o2a = 2*i, o2b = 2*j;
+        ctx.beginPath();
+        ctx.moveTo(points2d[o2a], points2d[o2a+1]);
+        ctx.lineTo(points2d[o2b], points2d[o2b+1]);
+        ctx.stroke();
+      }
+    } else {
+      for (let i = 0; i < N; i += step) {
+        const ai = nowSec - lastSeen[i];
+        if (!infinite) {
+          if (ai > trailSec) continue;
+          if (lastSeen[i] < -1e20) continue;
+        } else {
+          if (lastSeen[i] < -1e20) continue;
+        }
+        const age01 = infinite ? 1.0 : clamp01(1.0 - (ai / trailSec));
+        ctx.fillStyle = composeStroke(i, age01);
+        const r = 1.2 + 0.35 * widthByAge(age01);
+        const o2 = 2*i;
+        ctx.beginPath();
+        ctx.arc(points2d[o2], points2d[o2+1], r, 0, TAU);
+        ctx.fill();
+      }
+    }
+
+    // head marker
+    const hi = Math.floor(headPos) % N;
+    const o2h = 2*hi;
+    ctx.fillStyle = 'rgba(255,255,255,0.95)';
+    ctx.beginPath();
+    ctx.arc(points2d[o2h], points2d[o2h+1], 2.6, 0, TAU);
+    ctx.fill();
+
+    hud();
+    ctx.restore();
+
+    commitToAccumulation();
+  }
+
+
+  function drawFull(noBg=false){
+    if (!noBg) {
+      ctx.clearRect(0,0,W,H);
+      ctx.fillStyle='#0b0d10';
+      ctx.fillRect(0,0,W,H);
+    }
+    if (!points2d) return;
+
+    const step = Math.max(1, +sliders.step.value);
+    ctx.save();
+    ctx.globalAlpha = 0.95;
+
+    if (!drawDots) {
+      for (let i=0;i<N-step;i+=step){
+        ctx.strokeStyle = composeStroke(i, 1.0);
+        ctx.lineWidth = widthByAge(1.0);
+        const o2a=2*i, o2b=2*(i+step);
+        ctx.beginPath();
+        ctx.moveTo(points2d[o2a], points2d[o2a+1]);
+        ctx.lineTo(points2d[o2b], points2d[o2b+1]);
+        ctx.stroke();
+      }
+    } else {
+      const r=1.1;
+      for (let i=0;i<N;i+=step){
+        ctx.fillStyle = composeStroke(i, 1.0);
+        const rr = r + 0.35*widthByAge(1.0);
+        const o2=2*i;
+        ctx.beginPath(); ctx.arc(points2d[o2], points2d[o2+1], rr, 0, TAU); ctx.fill();
+      }
+    }
+
+    hud();
+    ctx.restore();
+  }
+
+  function render(){
+    if (sliders.drawMode.value === 'full') drawFull();
+    else drawTrail();
+  }
+
+  // ---------- 4D rotation anim ----------
+  function addAngle(plane, delta){
+    if (!plane || plane === 'none') return;
+    const s = sliders[plane];
+    if (!s) return;
+    let next = (+s.value) + delta;
+    if (next > Math.PI) next -= TAU;
+    if (next < -Math.PI) next += TAU;
+    s.value = next;
+  }
+
+  // ---------- pipeline ----------
+  function recomputeStatic(){
+    refreshLabels();
+    generate4D();
+    apply4DRotationsAndProject();
+    project3DTo2D();
+    render();
+  }
+  function recomputeTransformOnly(){
+    refreshLabels();
+    if (!points4d) generate4D();
+    apply4DRotationsAndProject();
+    project3DTo2D();
+    render();
+  }
+
+  // ---------- main loop ----------
+  function tick(ts){
+    const targetFps = +sliders.fps.value;
+    const minDt = 1000/targetFps;
+
+    if (!lastFrame) lastFrame = ts;
+    const dt = ts - lastFrame;
+
+    if (dt >= minDt){
+      lastFrame = ts;
+      const dtSec = dt/1000;
+
+      // 4D rotation
+      if (sliders.play.value === 'on'){
+        addAngle(sliders.plane1.value, (+sliders.spd1.value) * dtSec);
+        addAngle(sliders.plane2.value, (+sliders.spd2.value) * dtSec);
+      }
+
+      // head advance
+      wrappedThisTick = false;
+      // head advance (timestamp-based, no reset on wrap)
+      if (sliders.drawMode.value === 'trail' && !stopAtEnd) {
+        nowSec += dtSec;
+
+        const pps = pointsPerSecond();
+        const prev = headPos;
+        headPos += pps * dtSec;
+
+        if (headPos >= N) {
+          drawnOnce = true;
+          if (sliders.loopMode.value === 'stop') {
+            headPos = N - 1;
+            stopAtEnd = true;
+          } else {
+            headPos = headPos % N; // loop
+          }
+        }
+
+        // Mark visited indices between prev -> headPos (may wrap)
+        // We mark "passed points" so trail is continuous even if fps is low.
+        const markRange = (a, b) => {
+          // mark integer indices in [ceil(a), floor(b)] (in forward direction)
+          let i0 = Math.floor(a) + 1;
+          let i1 = Math.floor(b);
+          if (i1 < i0) return;
+          for (let i = i0; i <= i1; i++) {
+            const idx = i % N;
+            lastSeen[idx] = nowSec;
+          }
+        };
+
+        if (sliders.loopMode.value === 'stop' && stopAtEnd) {
+          // mark up to end
+          markRange(prev, N - 1);
+        } else {
+          // detect wrap by comparing with previous float position
+          if (prev <= headPos) {
+            markRange(prev, headPos);
+          } else {
+            // wrapped: prev..N-1 and 0..headPos
+            markRange(prev, N - 1);
+            markRange(-1, headPos); // from -1 so it includes 0..floor(headPos)
+          }
+        }
+
+        lastHeadPos = prev;
+      }
+
+      recomputeTransformOnly();
+    }
+
+    rafId = requestAnimationFrame(tick);
+  }
+
+  // ---------- interactions ----------
+  // ---------- config I/O ----------
+  function getConfigObject() {
+    // sliders: input/select/ etc
+    const sliderValues = {};
+    Object.entries(sliders).forEach(([id, node]) => {
+      // keep only real DOM nodes with value
+      if (!node || typeof node.value === 'undefined') return;
+      sliderValues[id] = node.value;
+    });
+
+    // non-slider runtime state
+    const state = {
+      yaw, pitch, zoom,
+      drawDots,
+      headPos,
+      nowSec,
+    };
+
+    return {
+      v: 1,
+      t: Date.now(),
+      sliderValues,
+      state
+    };
+  }
+
+  function applyConfigObject(cfg) {
+    if (!cfg || typeof cfg !== 'object') throw new Error('設定JSONが不正です');
+
+    const sv = cfg.sliderValues || cfg.sliders || null;
+    if (!sv) throw new Error('sliderValues が見つかりません');
+
+    // Apply slider/select values
+    Object.entries(sv).forEach(([id, val]) => {
+      if (sliders[id] && typeof sliders[id].value !== 'undefined') {
+        sliders[id].value = String(val);
+      }
+    });
+
+    // Apply view/state (optional)
+    if (cfg.state) {
+      if (typeof cfg.state.yaw === 'number') yaw = cfg.state.yaw;
+      if (typeof cfg.state.pitch === 'number') pitch = cfg.state.pitch;
+      if (typeof cfg.state.zoom === 'number') zoom = cfg.state.zoom;
+      if (typeof cfg.state.drawDots === 'boolean') drawDots = cfg.state.drawDots;
+      // headPos/nowSec は復元しても良いが、通常は描画をやり直す方が自然なので任意
+    }
+
+    // 重要：速度モード表示切替
+    const sm = sliders.speedMode.value;
+    sliders.drawSpeed.parentElement.style.display = (sm === 'pps') ? '' : 'none';
+    sliders.period.parentElement.style.display = (sm === 'period') ? '' : 'none';
+
+    // Nなどが変わる可能性があるので、静的再計算
+    refreshLabels();
+    generate4D();
+    apply4DRotationsAndProject();
+    project3DTo2D();
+
+    // 軌跡は設定読み込み後は「最初から」にする方が破綻しない
+    restartDraw();
+    clearAccumulation();
+    render();
+  }
+
+  function stringifyConfig(pretty=true) {
+    const obj = getConfigObject();
+    return JSON.stringify(obj, null, pretty ? 2 : 0);
+  }
+
+  function setCfgText(s) {
+    cfgText.value = s;
+    cfgLen.textContent = String(s.length);
+  }
+
+  function parseConfigFromText() {
+    const s = cfgText.value.trim();
+    if (!s) throw new Error('設定JSONが空です');
+    return JSON.parse(s);
+  }
+
+  function bind(){
+    const baseIds = new Set(['N','loops','R1','r1','a','b','R2','c']);
+    Object.entries(sliders).forEach(([id, s]) => {
+      const handler = () => {
+        // show/hide speed sliders
+        const sm = sliders.speedMode.value;
+        sliders.drawSpeed.parentElement.style.display = (sm === 'pps') ? '' : 'none';
+        sliders.period.parentElement.style.display = (sm === 'period') ? '' : 'none';
+
+        if (baseIds.has(id)) recomputeStatic();
+        else {
+          // if switching accumulation state, better clear to avoid mismatch
+          if (id === 'accum' || id === 'accumFade') clearAccumulation();
+          recomputeTransformOnly();
+        }
+      };
+      s.addEventListener('input', handler);
+      s.addEventListener('change', handler);
+    });
+
+    // initial visibility
+    const sm = sliders.speedMode.value;
+    sliders.drawSpeed.parentElement.style.display = (sm === 'pps') ? '' : 'none';
+    sliders.period.parentElement.style.display = (sm === 'period') ? '' : 'none';
+
+    btnReset4d.addEventListener('click', () => {
+      ['XY','XZ','XW','YZ','YW','ZW'].forEach(id => sliders[id].value = 0);
+      recomputeTransformOnly();
+    });
+
+    btnResetView.addEventListener('click', () => {
+      yaw = 0.4; pitch = -0.25; zoom = 1.8;
+      project3DTo2D();
+      render();
+    });
+
+    btnToggleDots.addEventListener('click', () => {
+      drawDots = !drawDots;
+      render();
+    });
+
+    btnSnap.addEventListener('click', () => {
+      const a = document.createElement('a');
+      a.download = '4d_spirograph.png';
+      a.href = cv.toDataURL('image/png');
+      a.click();
+    });
+
+    btnRestartDraw.addEventListener('click', () => {
+      restartDraw();
+      clearAccumulation();
+      render();
+    });
+
+    btnClearAccum.addEventListener('click', () => {
+      clearAccumulation();
+      render();
+    });
+    // --- config export/import ---
+    btnExportCfg.addEventListener('click', async () => {
+      try {
+        const s = stringifyConfig(true);
+        setCfgText(s);
+        await navigator.clipboard.writeText(s);
+      } catch (e) {
+        // clipboardが使えない環境向け：テキストエリアへ出すだけ
+        const s = stringifyConfig(true);
+        setCfgText(s);
+        alert('クリップボードにコピーできなかったので、下のテキストを手動でコピーしてください。');
+      }
+    });
+
+    btnDownloadCfg.addEventListener('click', () => {
+      const s = stringifyConfig(true);
+      setCfgText(s);
+      const blob = new Blob([s], { type: 'application/json' });
+      const a = document.createElement('a');
+      a.download = '4d_spirograph_config.json';
+      a.href = URL.createObjectURL(blob);
+      a.click();
+      setTimeout(() => URL.revokeObjectURL(a.href), 500);
+    });
+
+    btnImportCfg.addEventListener('click', () => {
+      try {
+        const cfg = parseConfigFromText();
+        applyConfigObject(cfg);
+      } catch (e) {
+        alert('読み込み失敗: ' + (e && e.message ? e.message : String(e)));
+      }
+    });
+
+    uploadCfg.addEventListener('change', async () => {
+      const file = uploadCfg.files && uploadCfg.files[0];
+      if (!file) return;
+      try {
+        const text = await file.text();
+        setCfgText(text);
+        const cfg = JSON.parse(text);
+        applyConfigObject(cfg);
+      } catch (e) {
+        alert('ファイル読み込み失敗: ' + (e && e.message ? e.message : String(e)));
+      } finally {
+        uploadCfg.value = '';
+      }
+    });
+
+
+    // mouse
+    cv.addEventListener('mousedown', (e)=>{ isDrag=true; lastX=e.clientX; lastY=e.clientY; });
+    window.addEventListener('mouseup', ()=>isDrag=false);
+    window.addEventListener('mousemove', (e)=>{
+      if(!isDrag) return;
+      const dx=e.clientX-lastX, dy=e.clientY-lastY;
+      lastX=e.clientX; lastY=e.clientY;
+      yaw += dx*0.005;
+      pitch += dy*0.005;
+      const limit=1.55;
+      pitch=Math.max(-limit, Math.min(limit, pitch));
+      project3DTo2D();
+      render();
+    });
+
+    cv.addEventListener('wheel', (e)=>{
+      e.preventDefault();
+      const delta=Math.sign(e.deltaY);
+      zoom *= (delta>0)?0.92:1.08;
+      zoom = Math.max(0.35, Math.min(6.0, zoom));
+      project3DTo2D();
+      render();
+    }, {passive:false});
+
+    window.addEventListener('resize', ()=>{
+      resize();
+      project3DTo2D();
+      render();
+    });
+  }
+
+  // ---------- boot ----------
+  resize();
+  bind();
+  refreshLabels();
+  generate4D();
+  apply4DRotationsAndProject();
+  project3DTo2D();
+  render();
+  rafId = requestAnimationFrame(tick);
+})();
+</script>
+</body>
+</html>
